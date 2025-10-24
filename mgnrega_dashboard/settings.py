@@ -139,11 +139,16 @@ LOGGING = {
     },
 }
 
-# MGNREGA API Configuration (defaults)
-# MGNREGA_API_KEY = ''
+# MGNREGA API Configuration
+MGNREGA_API_KEY = ''  # Will be overridden by settings_local.py
 MGNREGA_API_BASE_URL = 'https://api.data.gov.in/resource'
+
+# Real Resource IDs from data.gov.in
+# Visit: https://data.gov.in/catalog/mahatma-gandhi-national-rural-employment-guarantee-act-mgnrega
+# Find the correct resource ID for MGNREGA district performance data
 MGNREGA_RESOURCE_IDS = {
-    'district_performance': '48e7dcef-d179-4741-8c0f-bd0bd2b6e678',
+    # This is just an example - replace with actual MGNREGA resource ID
+    'district_performance': 'ee03643a-ee4c-48c2-ac30-9f2ff26ab722',
 }
 
 # Import local settings if exists (this overrides above values)

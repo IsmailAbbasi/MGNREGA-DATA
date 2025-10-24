@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load static %}
 
 {% block title %}Select District - MGNREGA{% endblock %}
 
@@ -18,15 +19,19 @@
         <div class="col-md-8 mx-auto">
             <div class="input-group input-group-lg">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" id="searchDistrict" placeholder="Search district / ज़िला खोजें...">
+                <input type="text" class="form-control" id="searchDistrict" placeholder="Search district / ज़िला खोजें... (e.g., Lucknow, Mumbai, Pune)">
             </div>
+            <div id="searchResults" class="mt-2 text-muted"></div>
         </div>
     </div>
     
     <!-- Districts Grid -->
     <div class="row" id="districtGrid">
         {% for district in districts %}
-        <div class="col-md-4 col-sm-6 mb-4 district-item" data-name="{{ district.name|lower }}">
+        <div class="col-md-4 col-sm-6 mb-4 district-item" 
+             data-name="{{ district.name|lower }}" 
+             data-state="{{ district.state|lower }}"
+             data-code="{{ district.district_code|lower }}">
             <div class="card district-card">
                 <div class="card-header">
                     <i class="bi bi-pin-map-fill"></i> {{ district.name }}
@@ -60,19 +65,54 @@
 </div>
 
 <script>
-    // Search functionality
-    document.getElementById('searchDistrict').addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        const districts = document.querySelectorAll('.district-item');
+    // Search functionality with debouncing
+    let searchTimeout;
+    const searchInput = document.getElementById('searchDistrict');
+    const districtItems = document.querySelectorAll('.district-item');
+    const searchResults = document.getElementById('searchResults');
+    
+    searchInput.addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
         
-        districts.forEach(district => {
-            const name = district.getAttribute('data-name');
-            if (name.includes(searchTerm)) {
-                district.style.display = 'block';
+        searchTimeout = setTimeout(() => {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            let visibleCount = 0;
+            
+            districtItems.forEach(district => {
+                const name = district.getAttribute('data-name');
+                const state = district.getAttribute('data-state');
+                const code = district.getAttribute('data-code');
+                
+                // Search in name, state, or code
+                const matches = name.includes(searchTerm) || 
+                               state.includes(searchTerm) || 
+                               code.includes(searchTerm);
+                
+                if (searchTerm === '' || matches) {
+                    district.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    district.style.display = 'none';
+                }
+            });
+            
+            // Update search results message
+            if (searchTerm === '') {
+                searchResults.textContent = '';
+            } else if (visibleCount === 0) {
+                searchResults.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> No districts found matching "' + e.target.value + '"</span>';
             } else {
-                district.style.display = 'none';
+                searchResults.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Found ' + visibleCount + ' district(s)</span>';
             }
-        });
+        }, 300); // Wait 300ms after user stops typing
+    });
+    
+    // Clear search on Escape key
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            this.value = '';
+            this.dispatchEvent(new Event('input'));
+        }
     });
 </script>
 {% endblock %}
