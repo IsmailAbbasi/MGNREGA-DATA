@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Dashboard</title>
+    <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/custom.css' %}">
+</head>
+<body>
+    {% include 'base.html' %}
+    
+    <div class="container mt-5">
+        <h1 class="text-center">MGNREGA Performance Dashboard</h1>
+        <h2 class="text-center">District: {{ district.name }}</h2>
+        
+        <div class="row">
+            <div class="col-md-12">
+                <h3>Current Performance Metrics</h3>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Total Expenditure</td>
+                            <td>{{ performance.total_expenditure }}</td>
+                        </tr>
+                        <tr>
+                            <td>Work Completed</td>
+                            <td>{{ performance.work_completed }}</td>
+                        </tr>
+                        <tr>
+                            <td>Pending Payments</td>
+                            <td>{{ performance.pending_payments }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <h3>Historical Performance</h3>
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <script>
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const performanceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ performance.dates|safe }},
+                datasets: [{
+                    label: 'Expenditure Over Time',
+                    data: {{ performance.expenditure_data|safe }},
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

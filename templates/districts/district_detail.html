@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>District Performance - MGNREGA</title>
+    <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/custom.css' %}">
+</head>
+<body>
+    {% include 'base.html' %}
+    
+    <div class="container mt-5">
+        <h1>Performance of {{ district.name }}</h1>
+        <p>Here you can view the performance metrics for the selected district in the MGNREGA program.</p>
+
+        <div class="card">
+            <div class="card-header">
+                Performance Metrics
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Key Metrics</h5>
+                <ul class="list-group">
+                    <li class="list-group-item">Total Workdays: {{ performance.total_workdays }}</li>
+                    <li class="list-group-item">Total Expenditure: ₹{{ performance.total_expenditure }}</li>
+                    <li class="list-group-item">Completed Works: {{ performance.completed_works }}</li>
+                    <li class="list-group-item">Pending Works: {{ performance.pending_works }}</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <a href="{% url 'district_list' %}" class="btn btn-primary">Back to District List</a>
+        </div>
+    </div>
+
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+</html>

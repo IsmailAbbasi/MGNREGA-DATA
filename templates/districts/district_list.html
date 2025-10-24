@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Select District - MGNREGA{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="text-center mb-5">
+        <h1 class="display-4 fw-bold text-primary">
+            <i class="bi bi-geo-alt-fill"></i> 
+            अपना ज़िला चुनें
+        </h1>
+        <p class="lead text-muted">Select Your District / Choose your district to view MGNREGA performance</p>
+    </div>
+    
+    <!-- Search Bar -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="searchDistrict" placeholder="Search district / ज़िला खोजें...">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Districts Grid -->
+    <div class="row" id="districtGrid">
+        {% for district in districts %}
+        <div class="col-md-4 col-sm-6 mb-4 district-item" data-name="{{ district.name|lower }}">
+            <div class="card district-card">
+                <div class="card-header">
+                    <i class="bi bi-pin-map-fill"></i> {{ district.name }}
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <i class="bi bi-building"></i> 
+                        <strong>State:</strong> {{ district.state }}
+                    </p>
+                    <p class="mb-3">
+                        <i class="bi bi-people-fill"></i> 
+                        <strong>Population:</strong> {{ district.population|intcomma|default:"N/A" }}
+                    </p>
+                    <a href="{% url 'district_detail' district.id %}" class="btn btn-primary-custom w-100">
+                        <i class="bi bi-bar-chart-fill"></i> View Performance / प्रदर्शन देखें
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-warning text-center">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <h4>No districts available</h4>
+                <p>Please add districts through the admin panel.</p>
+                <a href="/admin/" class="btn btn-primary-custom mt-3">Go to Admin Panel</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    // Search functionality
+    document.getElementById('searchDistrict').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const districts = document.querySelectorAll('.district-item');
+        
+        districts.forEach(district => {
+            const name = district.getAttribute('data-name');
+            if (name.includes(searchTerm)) {
+                district.style.display = 'block';
+            } else {
+                district.style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}
