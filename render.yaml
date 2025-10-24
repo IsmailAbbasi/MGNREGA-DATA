@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: mgnrega-dashboard
+    runtime: python
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn mgnrega_dashboard.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: MGNREGA_API_KEY
+        sync: false
+    healthCheckPath: /
