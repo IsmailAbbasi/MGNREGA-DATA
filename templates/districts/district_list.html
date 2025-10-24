@@ -7,112 +7,192 @@
 {% block content %}
 <div class="content-wrapper">
     <div class="text-center mb-5">
-        <h1 class="display-4 fw-bold text-primary">
-            <i class="bi bi-geo-alt-fill"></i> 
-            अपना ज़िला चुनें
+        <h1 class="display-3 fw-bold text-primary">
+            <i class="bi bi-geo-alt-fill"></i>
+            अपना जिला चुनें
         </h1>
-        <p class="lead text-muted">Select Your District / Choose your district to view MGNREGA performance</p>
+        <p class="lead text-muted">
+            Select Your District / Choose your district to view MGNREGA performance
+        </p>
+    </div>
+    
+    <!-- Info Alert about Urban Districts -->
+    <div class="row mb-4">
+        <div class="col-md-10 offset-md-1">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill"></i>
+                <strong>Note:</strong> MGNREGA primarily covers rural districts. 
+                <strong>Highly urbanized cities</strong> like Mumbai, Delhi, Chennai, Kolkata, and Hyderabad 
+                are not included in MGNREGA reporting as they have separate urban employment schemes.
+                <br>
+                <small class="mt-2 d-block">
+                    <strong>Showing {{ districts_with_data_count }} districts</strong> with available MGNREGA data out of {{ total_districts }} total districts.
+                </small>
+            </div>
+        </div>
     </div>
     
     <!-- Search Bar -->
     <div class="row mb-4">
-        <div class="col-md-8 mx-auto">
-            <div class="input-group input-group-lg">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" id="searchDistrict" placeholder="Search district / ज़िला खोजें... (e.g., Lucknow, Mumbai, Pune)">
+        <div class="col-md-8 offset-md-2">
+            <div class="input-group input-group-lg shadow-sm">
+                <span class="input-group-text bg-white">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input 
+                    type="text" 
+                    class="form-control" 
+                    id="searchDistrict" 
+                    placeholder="Search district / जिला खोजें... (e.g., Lucknow, Pune, Bengaluru, Jaipur)"
+                    autocomplete="off"
+                >
             </div>
-            <div id="searchResults" class="mt-2 text-muted"></div>
+            <div class="mt-2 text-muted small">
+                <i class="bi bi-info-circle"></i> 
+                Districts with data: <strong>{{ districts_with_data_count }}</strong>
+            </div>
         </div>
     </div>
     
-    <!-- Districts Grid -->
-    <div class="row" id="districtGrid">
-        {% for district in districts %}
-        <div class="col-md-4 col-sm-6 mb-4 district-item" 
-             data-name="{{ district.name|lower }}" 
-             data-state="{{ district.state|lower }}"
-             data-code="{{ district.district_code|lower }}">
-            <div class="card district-card">
-                <div class="card-header">
-                    <i class="bi bi-pin-map-fill"></i> {{ district.name }}
-                </div>
-                <div class="card-body">
-                    <p class="mb-2">
-                        <i class="bi bi-building"></i> 
-                        <strong>State:</strong> {{ district.state }}
-                    </p>
-                    <p class="mb-3">
-                        <i class="bi bi-people-fill"></i> 
-                        <strong>Population:</strong> {{ district.population|intcomma|default:"N/A" }}
-                    </p>
-                    <a href="{% url 'district_detail' district.id %}" class="btn btn-primary-custom w-100">
-                        <i class="bi bi-bar-chart-fill"></i> View Performance / प्रदर्शन देखें
-                    </a>
-                </div>
+    <!-- Popular Districts Quick Links -->
+    {% if popular_districts %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="text-center mb-3">
+                <h5 class="text-muted">
+                    <i class="bi bi-star-fill text-warning"></i> Popular Districts / लोकप्रिय जिले
+                </h5>
+            </div>
+            <div class="d-flex flex-wrap justify-content-center gap-2">
+                {% for district in popular_districts %}
+                <a href="{% url 'district_detail' district.id %}" 
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-geo-alt"></i> {{ district.name }}
+                </a>
+                {% endfor %}
             </div>
         </div>
+    </div>
+    {% endif %}
+    
+    <!-- Districts Grid - Only show districts WITH data -->
+    <div class="row" id="districtGrid">
+        {% for district in districts %}
+            {% if district.data_count > 0 %}
+            <div class="col-md-4 mb-4 district-card" 
+                 data-name="{{ district.name|lower }}" 
+                 data-state="{{ district.state|lower }}">
+                <div class="card h-100 shadow-sm hover-card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-geo-alt-fill"></i> {{ district.name }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">
+                            <i class="bi bi-building"></i> 
+                            <strong>State:</strong> {{ district.state }}
+                        </p>
+                        {% if district.population %}
+                        <p class="mb-2">
+                            <i class="bi bi-people-fill"></i> 
+                            <strong>Population:</strong> {{ district.population|intcomma }}
+                        </p>
+                        {% endif %}
+                        <p class="mb-3 text-success">
+                            <i class="bi bi-check-circle-fill"></i> 
+                            <strong>{{ district.data_count }}</strong> data record{{ district.data_count|pluralize }} available
+                        </p>
+                        <a href="{% url 'district_detail' district.id %}" class="btn btn-primary w-100">
+                            <i class="bi bi-bar-chart-fill"></i> View Performance / प्रदर्शन देखें
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         {% empty %}
         <div class="col-12">
             <div class="alert alert-warning text-center">
                 <i class="bi bi-exclamation-triangle-fill"></i>
-                <h4>No districts available</h4>
-                <p>Please add districts through the admin panel.</p>
-                <a href="/admin/" class="btn btn-primary-custom mt-3">Go to Admin Panel</a>
+                <h4>No Districts Found</h4>
+                <p>Please run: <code>python manage.py fetch_all_districts</code> and <code>python manage.py sync_mgnrega_data --bulk</code></p>
             </div>
         </div>
         {% endfor %}
     </div>
+    
+    <!-- No Results Message -->
+    <div class="row d-none" id="noResults">
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <i class="bi bi-search"></i>
+                <h5>No districts found matching your search</h5>
+                <p class="mb-0">
+                    Try different keywords or browse all districts. 
+                    <br>
+                    <small class="text-muted">
+                        Remember: Only showing districts with available MGNREGA data.
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
-    // Search functionality with debouncing
-    let searchTimeout;
-    const searchInput = document.getElementById('searchDistrict');
-    const districtItems = document.querySelectorAll('.district-item');
-    const searchResults = document.getElementById('searchResults');
-    
-    searchInput.addEventListener('input', function(e) {
-        clearTimeout(searchTimeout);
+// Search functionality with debouncing
+let searchTimeout;
+const searchInput = document.getElementById('searchDistrict');
+const districtCards = document.querySelectorAll('.district-card');
+const noResults = document.getElementById('noResults');
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        const searchTerm = this.value.toLowerCase().trim();
+        let visibleCount = 0;
         
-        searchTimeout = setTimeout(() => {
-            const searchTerm = e.target.value.toLowerCase().trim();
-            let visibleCount = 0;
+        districtCards.forEach(card => {
+            const name = card.dataset.name;
+            const state = card.dataset.state;
             
-            districtItems.forEach(district => {
-                const name = district.getAttribute('data-name');
-                const state = district.getAttribute('data-state');
-                const code = district.getAttribute('data-code');
-                
-                // Search in name, state, or code
-                const matches = name.includes(searchTerm) || 
-                               state.includes(searchTerm) || 
-                               code.includes(searchTerm);
-                
-                if (searchTerm === '' || matches) {
-                    district.style.display = 'block';
-                    visibleCount++;
-                } else {
-                    district.style.display = 'none';
-                }
-            });
-            
-            // Update search results message
-            if (searchTerm === '') {
-                searchResults.textContent = '';
-            } else if (visibleCount === 0) {
-                searchResults.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> No districts found matching "' + e.target.value + '"</span>';
+            if (name.includes(searchTerm) || state.includes(searchTerm)) {
+                card.classList.remove('d-none');
+                visibleCount++;
             } else {
-                searchResults.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Found ' + visibleCount + ' district(s)</span>';
+                card.classList.add('d-none');
             }
-        }, 300); // Wait 300ms after user stops typing
+        });
+        
+        // Show/hide no results message
+        if (visibleCount === 0 && searchTerm !== '') {
+            noResults.classList.remove('d-none');
+        } else {
+            noResults.classList.add('d-none');
+        }
+    }, 300);
+});
+
+// Add hover effect
+document.querySelectorAll('.hover-card').forEach(card => {
+    card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateY(-5px)';
+        this.style.transition = 'transform 0.3s ease';
     });
     
-    // Clear search on Escape key
-    searchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            this.value = '';
-            this.dispatchEvent(new Event('input'));
-        }
+    card.addEventListener('mouseleave', function() {
+        this.style.transform = 'translateY(0)';
     });
+});
 </script>
+
+<style>
+.hover-card {
+    transition: all 0.3s ease;
+}
+
+.hover-card:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+}
+</style>
 {% endblock %}

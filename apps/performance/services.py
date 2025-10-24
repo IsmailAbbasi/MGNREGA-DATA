@@ -5,6 +5,7 @@ from django.conf import settings
 from apps.districts.models import District, MGNREGAData
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from django.db.models import Count
 import calendar
 import re
 
@@ -19,124 +20,78 @@ class MGNREGADataService:
     
     CACHE_TIMEOUT = 3600 * 24  # 24 hours
     
-    # Month name to number mapping
-    MONTH_MAP = {
-        'jan': 1, 'january': 1,
-        'feb': 2, 'february': 2,
-        'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4,
-        'may': 5,
-        'jun': 6, 'june': 6,
-        'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'dec': 12, 'december': 12,
-    }
-    
     @staticmethod
-    def parse_month(month_value):
-        """Convert month name or number to integer"""
-        if not month_value:
+    def parse_month(month_str):
+        """Parse month string to month number"""
+        if not month_str or month_str == 'NA':
             return None
         
-        # If already a number
-        if isinstance(month_value, int):
-            return month_value
+        month_str = str(month_str).strip().lower()
         
-        # If string number
-        if isinstance(month_value, str) and month_value.isdigit():
-            return int(month_value)
+        month_map = {
+            'jan': 1, 'january': 1,
+            'feb': 2, 'february': 2,
+            'mar': 3, 'march': 3,
+            'apr': 4, 'april': 4,
+            'may': 5,
+            'jun': 6, 'june': 6,
+            'jul': 7, 'july': 7,
+            'aug': 8, 'august': 8,
+            'sep': 9, 'september': 9,
+            'oct': 10, 'october': 10,
+            'nov': 11, 'november': 11,
+            'dec': 12, 'december': 12
+        }
         
-        # If month name
-        if isinstance(month_value, str):
-            month_lower = month_value.lower().strip()
-            return MGNREGADataService.MONTH_MAP.get(month_lower)
-        
-        return None
+        return month_map.get(month_str)
     
     @staticmethod
-    def parse_year(year_value):
-        """Extract year from various formats"""
-        if not year_value:
-            return datetime.now().year
+    def parse_year(year_str):
+        """Parse financial year string to year"""
+        if not year_str:
+            return None
         
-        if isinstance(year_value, int):
-            return year_value
+        year_str = str(year_str).strip()
         
-        # Handle formats like "2024-25", "2024", "FY2024"
-        if isinstance(year_value, str):
-            # Remove any non-numeric characters except hyphen
-            year_str = ''.join(c for c in year_value if c.isdigit() or c == '-')
-            
-            # If format is "2024-25", take first year
-            if '-' in year_str:
-                return int(year_str.split('-')[0])
-            
-            # If just a number
-            if year_str.isdigit():
-                year = int(year_str)
-                # If 2-digit year, convert to 4-digit
-                if year < 100:
-                    year += 2000
-                return year
+        if '-' in year_str:
+            parts = year_str.split('-')
+            return int(parts[0])
         
-        return datetime.now().year
+        return int(year_str)
     
     @staticmethod
     def safe_int(value, default=0):
         """Safely convert value to integer"""
-        if value is None or value == '':
+        if value is None or value == '' or value == 'NA':
             return default
-        
         try:
-            # Remove commas and convert
-            if isinstance(value, str):
-                value = value.replace(',', '').strip()
-                # Handle "NA", "N/A", "-", etc.
-                if value.lower() in ['na', 'n/a', '-', 'nil', 'null']:
-                    return default
-            return int(float(value))
-        except (ValueError, TypeError, AttributeError):
+            return int(float(str(value)))
+        except (ValueError, TypeError):
             return default
     
     @staticmethod
-    def safe_decimal(value, default=0):
+    def safe_decimal(value, default='0.00'):
         """Safely convert value to Decimal"""
-        if value is None or value == '':
+        if value is None or value == '' or value == 'NA':
             return Decimal(default)
-        
         try:
-            # Handle string values
-            if isinstance(value, str):
-                value = value.strip()
-                # Handle "NA", "N/A", "-", etc.
-                if value.lower() in ['na', 'n/a', '-', 'nil', 'null', '']:
-                    return Decimal(default)
-                # Remove commas and any non-numeric characters except dot and hyphen
-                value = re.sub(r'[^\d\.\-]', '', value)
-                if value == '' or value == '-':
-                    return Decimal(default)
-            
             return Decimal(str(value))
-        except (ValueError, TypeError, AttributeError, InvalidOperation):
-            logger.warning(f"Could not convert '{value}' to Decimal, using default {default}")
+        except (ValueError, TypeError, InvalidOperation):
             return Decimal(default)
     
     @staticmethod
     def fetch_all_states_data(force_refresh=False):
-        """Fetch data for all states"""
-        cache_key = 'mgnrega_all_states'
+        """Fetch data for all states from API with caching"""
+        cache_key = 'mgnrega_all_states_data'
         
         if not force_refresh:
-            cached = cache.get(cache_key)
-            if cached:
-                return cached
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                logger.info("Returning cached data for all states")
+                return cached_data
         
         try:
             resource_id = MGNREGADataService.RESOURCE_IDS.get('district_performance')
-            url = f"{MGNREGADataService.API_BASE_URL}/{resource_id}"
             
             params = {
                 'api-key': MGNREGADataService.API_KEY,
@@ -144,26 +99,117 @@ class MGNREGADataService:
                 'limit': 10000,
             }
             
-            logger.info(f"Fetching data from API: {url}")
+            url = f"{MGNREGADataService.API_BASE_URL}/{resource_id}"
+            
+            logger.info(f"Fetching all states data from API: {url}")
             response = requests.get(url, params=params, timeout=60)
             response.raise_for_status()
             
             data = response.json()
             
-            if 'records' in data:
+            if data and 'records' in data:
                 cache.set(cache_key, data, MGNREGADataService.CACHE_TIMEOUT)
+                logger.info(f"Fetched and cached {len(data['records'])} records")
                 return data
             
             return None
             
         except Exception as e:
-            logger.error(f"API fetch failed: {str(e)}")
+            logger.error(f"Error fetching all states data: {e}")
             return None
     
     @staticmethod
-    def fetch_district_data(district_code, year=None, force_refresh=False):
+    def sync_data_to_database(district_code, api_response):
+        """Sync API data to database with CORRECT field mapping"""
+        if not api_response or not api_response.get('success'):
+            return False
+        
+        records = api_response.get('records', [])
+        if not records:
+            logger.warning(f"No records to sync for district {district_code}")
+            return False
+        
+        try:
+            district = District.objects.get(district_code=district_code)
+        except District.DoesNotExist:
+            logger.error(f"District not found: {district_code}")
+            return False
+        
+        synced_count = 0
+        
+        for record in records:
+            try:
+                # Parse year and month
+                year = MGNREGADataService.parse_year(record.get('fin_year'))
+                month = MGNREGADataService.parse_month(record.get('month'))
+                
+                if not year:
+                    logger.warning(f"Invalid year in record: {record.get('fin_year')}")
+                    continue
+                
+                # Map API fields to model fields correctly
+                data_dict = {
+                    'district': district,
+                    'year': year,
+                    'month': month,
+                    
+                    # Workers - API field: Total_Individuals_Worked
+                    'total_workers': MGNREGADataService.safe_int(record.get('Total_Individuals_Worked')),
+                    'total_active_workers': MGNREGADataService.safe_int(record.get('Total_No_of_Active_Workers')),
+                    
+                    # Job Cards - API field: Total_No_of_JobCards_issued
+                    'total_job_cards_issued': MGNREGADataService.safe_int(record.get('Total_No_of_JobCards_issued')),
+                    
+                    # Work Days - API field: Persondays_of_Central_Liability_so_far
+                    'total_work_days': MGNREGADataService.safe_decimal(record.get('Persondays_of_Central_Liability_so_far', 0)),
+                    
+                    # Average days - API field: Average_days_of_employment_provided_per_Household
+                    'average_days_per_household': MGNREGADataService.safe_decimal(
+                        record.get('Average_days_of_employment_provided_per_Household', 0)
+                    ),
+                    
+                    # Expenditure - API fields: Total_Exp, Wages, Material_and_skilled_Wages
+                    'total_expenditure': MGNREGADataService.safe_decimal(record.get('Total_Exp', 0)),
+                    'wage_expenditure': MGNREGADataService.safe_decimal(record.get('Wages', 0)),
+                    'material_expenditure': MGNREGADataService.safe_decimal(record.get('Material_and_skilled_Wages', 0)),
+                    
+                    # Works - API fields: Number_of_Completed_Works, Number_of_Ongoing_Works
+                    'works_completed': MGNREGADataService.safe_int(record.get('Number_of_Completed_Works')),
+                    'works_in_progress': MGNREGADataService.safe_int(record.get('Number_of_Ongoing_Works')),
+                    
+                    # Calculate employment rate
+                    'employment_rate': MGNREGADataService.safe_decimal(
+                        record.get('Average_days_of_employment_provided_per_Household', 0)
+                    ) / Decimal('100') * Decimal('100') if record.get('Average_days_of_employment_provided_per_Household') else Decimal('0'),
+                }
+                
+                # Update or create record
+                mgnrega_record, created = MGNREGAData.objects.update_or_create(
+                    district=district,
+                    year=year,
+                    month=month,
+                    defaults=data_dict
+                )
+                
+                synced_count += 1
+                
+                if created:
+                    logger.debug(f"Created new record for {district.name} - {year}/{month}")
+                else:
+                    logger.debug(f"Updated record for {district.name} - {year}/{month}")
+                
+            except Exception as e:
+                logger.error(f"Error syncing record: {e}")
+                logger.error(f"Record data: {record}")
+                continue
+        
+        logger.info(f"Synced {synced_count} records for district {district_code}")
+        return synced_count > 0
+    
+    @staticmethod
+    def fetch_district_data(district_code, force_refresh=False):
         """Fetch data for a specific district"""
-        cache_key = f"mgnrega_data_{district_code}_{year or 'all'}"
+        cache_key = f'mgnrega_district_{district_code}'
         
         if not force_refresh:
             cached_data = cache.get(cache_key)
@@ -173,212 +219,70 @@ class MGNREGADataService:
         
         try:
             resource_id = MGNREGADataService.RESOURCE_IDS.get('district_performance')
-            url = f"{MGNREGADataService.API_BASE_URL}/{resource_id}"
             
             params = {
                 'api-key': MGNREGADataService.API_KEY,
                 'format': 'json',
                 'limit': 1000,
+                'filters': f'{{"district_code": "{district_code}"}}'
             }
             
-            # Add filters
-            filters = {}
-            if district_code:
-                filters['district_code'] = district_code
-            if year:
-                filters['financial_year'] = str(year)
-            
-            if filters:
-                import json
-                params['filters'] = json.dumps(filters)
+            url = f"{MGNREGADataService.API_BASE_URL}/{resource_id}"
             
             logger.info(f"Fetching district data: {url} with params: {params}")
             response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
             
-            api_data = response.json()
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data and 'records' in data and len(data['records']) > 0:
+                    result = {
+                        'success': True,
+                        'records': data['records'],
+                        'source': 'api'
+                    }
+                    
+                    # Sync to database
+                    MGNREGADataService.sync_data_to_database(district_code, result)
+                    
+                    # Cache the result
+                    cache.set(cache_key, result, MGNREGADataService.CACHE_TIMEOUT)
+                    
+                    logger.info(f"API fetch successful for district {district_code}: {len(data['records'])} records")
+                    return result
             
-            if 'records' in api_data and len(api_data['records']) > 0:
-                result = {
-                    'success': True,
-                    'records': api_data['records'],
-                    'total': api_data.get('total', len(api_data['records'])),
-                    'source': 'api'
-                }
-                
-                # Cache the result
-                cache.set(cache_key, result, MGNREGADataService.CACHE_TIMEOUT)
-                
-                # Sync to database
-                MGNREGADataService.sync_data_to_database(district_code, result)
-                
-                return result
-            else:
-                logger.warning(f"No records found for district {district_code}")
-                
+            # If API fails, try to return from database
+            logger.warning(f"API fetch failed for district {district_code}, trying database fallback")
+            return MGNREGADataService._get_database_fallback(district_code)
+            
         except Exception as e:
-            logger.error(f"API fetch failed for district {district_code}: {str(e)}")
-        
-        # Fallback to database
-        db_data = MGNREGADataService._get_from_database(district_code)
-        if db_data:
-            logger.info(f"Returning database fallback for district {district_code}")
-            return db_data
-        
-        return None
+            logger.error(f"API fetch failed for district {district_code}: {e}")
+            return MGNREGADataService._get_database_fallback(district_code)
     
     @staticmethod
-    def _get_from_database(district_code):
-        """Fallback to get data from local database"""
+    def _get_database_fallback(district_code):
+        """Get data from database as fallback"""
         try:
             district = District.objects.get(district_code=district_code)
-            data = MGNREGAData.objects.filter(district=district).order_by('-year', '-month')
+            records = MGNREGAData.objects.filter(district=district).values()
             
-            if data.exists():
+            if records:
+                logger.info(f"Returning database fallback for district {district_code}")
                 return {
                     'success': True,
-                    'district': district,
-                    'records': [
-                        {
-                            'year': d.year,
-                            'month': d.month,
-                            'total_job_cards_issued': d.total_job_cards_issued,
-                            'total_workers': d.total_workers,
-                            'total_active_workers': d.total_active_workers,
-                            'total_work_days': float(d.total_work_days),
-                            'average_days_per_household': float(d.average_days_per_household),
-                            'total_expenditure': float(d.total_expenditure),
-                            'wage_expenditure': float(d.wage_expenditure),
-                            'material_expenditure': float(d.material_expenditure),
-                            'employment_rate': float(d.employment_rate),
-                            'works_completed': d.works_completed,
-                            'works_in_progress': d.works_in_progress,
-                        }
-                        for d in data
-                    ],
-                    'latest': data.first(),
+                    'records': list(records),
                     'source': 'database'
                 }
-        except District.DoesNotExist:
-            logger.error(f"District {district_code} not found")
         except Exception as e:
-            logger.error(f"Database query failed: {str(e)}")
+            logger.error(f"Database fallback failed: {e}")
         
-        return None
+        return {'success': False, 'records': [], 'source': 'none'}
     
     @staticmethod
-    def sync_data_to_database(district_code, api_data):
-        """Store fetched API data to database"""
-        try:
-            district = District.objects.get(district_code=district_code)
-            synced_count = 0
-            
-            # Log first record to understand structure
-            if api_data.get('records'):
-                first_record = api_data['records'][0]
-                logger.info(f"Sample record fields: {list(first_record.keys())}")
-                logger.info(f"Sample record: {first_record}")
-            
-            for record in api_data.get('records', []):
-                try:
-                    # Parse year and month
-                    year = MGNREGADataService.parse_year(
-                        record.get('financial_year') or 
-                        record.get('fin_year') or 
-                        record.get('year') or
-                        record.get('finyear')
-                    )
-                    
-                    month = MGNREGADataService.parse_month(
-                        record.get('month') or 
-                        record.get('fin_month') or
-                        record.get('month_name')
-                    )
-                    
-                    MGNREGAData.objects.update_or_create(
-                        district=district,
-                        year=year,
-                        month=month,
-                        defaults={
-                            'total_job_cards_issued': MGNREGADataService.safe_int(
-                                record.get('total_job_cards_issued') or 
-                                record.get('job_cards_issued') or
-                                record.get('total_job_cards')
-                            ),
-                            'total_workers': MGNREGADataService.safe_int(
-                                record.get('total_workers') or 
-                                record.get('persons_worked') or
-                                record.get('total_persons_worked')
-                            ),
-                            'total_active_workers': MGNREGADataService.safe_int(
-                                record.get('total_active_workers') or 
-                                record.get('active_workers') or
-                                record.get('active_job_cards')
-                            ),
-                            'total_work_days': MGNREGADataService.safe_decimal(
-                                record.get('persondays_generated') or 
-                                record.get('total_persondays') or
-                                record.get('person_days_generated')
-                            ),
-                            'average_days_per_household': MGNREGADataService.safe_decimal(
-                                record.get('avg_days_per_household') or 
-                                record.get('average_days_employment') or
-                                record.get('avg_days_employment')
-                            ),
-                            'total_expenditure': MGNREGADataService.safe_decimal(
-                                record.get('total_exp') or 
-                                record.get('total_expenditure') or
-                                record.get('total_expenditure_rs')
-                            ),
-                            'wage_expenditure': MGNREGADataService.safe_decimal(
-                                record.get('wage_exp') or 
-                                record.get('wages_paid') or
-                                record.get('wage_expenditure')
-                            ),
-                            'material_expenditure': MGNREGADataService.safe_decimal(
-                                record.get('material_exp') or 
-                                record.get('material_expenditure') or
-                                record.get('material_cost')
-                            ),
-                            'employment_rate': MGNREGADataService.safe_decimal(
-                                record.get('employment_rate') or 
-                                record.get('employment_percentage') or
-                                record.get('employment_percent')
-                            ),
-                            'works_completed': MGNREGADataService.safe_int(
-                                record.get('works_completed') or 
-                                record.get('completed_works') or
-                                record.get('total_works_completed')
-                            ),
-                            'works_in_progress': MGNREGADataService.safe_int(
-                                record.get('works_ongoing') or 
-                                record.get('ongoing_works') or
-                                record.get('works_in_progress')
-                            ),
-                        }
-                    )
-                    synced_count += 1
-                    
-                except Exception as e:
-                    logger.warning(f"Skipped record due to error: {str(e)}")
-                    continue
-            
-            logger.info(f"Synced {synced_count} records for district {district_code}")
-            return synced_count > 0
-            
-        except District.DoesNotExist:
-            logger.error(f"District {district_code} not found")
-            return False
-        except Exception as e:
-            logger.error(f"Failed to sync data: {str(e)}")
-            return False
-    
-    @staticmethod
-    def bulk_sync_all_states(force_refresh=False):
-        """Sync data for all districts across all states in India"""
-        logger.info(f"Starting bulk sync for ALL states")
+    def bulk_sync_all_states(force_refresh=False, skip_existing=False):
+        """Sync data for all districts across all states"""
+        logger.info(f"Starting bulk sync for ALL states (skip_existing={skip_existing})")
         
-        # First fetch all data from API
         all_data = MGNREGADataService.fetch_all_states_data(force_refresh)
         
         if not all_data or 'records' not in all_data:
@@ -387,12 +291,18 @@ class MGNREGADataService:
         
         logger.info(f"Fetched {len(all_data['records'])} total records from API")
         
-        # Get all districts from database
         all_districts = District.objects.all()
+        
+        if skip_existing:
+            all_districts = all_districts.annotate(
+                data_count=Count('mgnregadata')
+            ).filter(data_count=0)
+            logger.info(f"Skipping districts with existing data. Processing {all_districts.count()} districts")
+        
         total_districts = all_districts.count()
         synced_count = 0
+        skipped_count = 0
         
-        # Group by state for logging
         states = all_districts.values_list('state', flat=True).distinct()
         
         for state in states:
@@ -401,17 +311,12 @@ class MGNREGADataService:
             state_synced = 0
             
             for district in state_districts:
-                # Filter records for this district (try multiple matching strategies)
                 district_records = [
                     r for r in all_data['records']
                     if (
                         r.get('district_code') == district.district_code or
-                        r.get('dist_code') == district.district_code or
-                        r.get('districtcode') == district.district_code or
-                        (r.get('district_name', '').lower() == district.name.lower() and 
-                         r.get('state_name', '').lower() == district.state.lower()) or
-                        (r.get('districtname', '').lower() == district.name.lower() and 
-                         r.get('statename', '').lower() == district.state.lower())
+                        (r.get('district_name', '').lower().strip() == district.name.lower().strip() and 
+                         r.get('state_name', '').lower().strip() == district.state.lower().strip())
                     )
                 ]
                 
@@ -426,19 +331,20 @@ class MGNREGADataService:
                         synced_count += 1
                         state_synced += 1
                         logger.info(f"  ✓ Synced {len(district_records)} records for {district.name}")
-        
+                else:
+                    skipped_count += 1
+                    logger.warning(f"  ✗ No API data found for {district.name}")
+            
             logger.info(f"Completed {state}: {state_synced}/{state_districts.count()} districts synced")
         
-        logger.info(f"Bulk sync complete: {synced_count}/{total_districts} districts synced across all states")
+        logger.info(f"Bulk sync complete: {synced_count} synced, {skipped_count} skipped out of {total_districts} districts")
         return True
-
-    # Keep the existing bulk_sync_all_districts for single state
+    
     @staticmethod
-    def bulk_sync_all_districts(state='Maharashtra', force_refresh=False):
+    def bulk_sync_all_districts(state='Maharashtra', force_refresh=False, skip_existing=False):
         """Sync data for all districts in a specific state"""
-        logger.info(f"Starting bulk sync for {state}")
+        logger.info(f"Starting bulk sync for {state} (skip_existing={skip_existing})")
         
-        # First fetch all data from API
         all_data = MGNREGADataService.fetch_all_states_data(force_refresh)
         
         if not all_data or 'records' not in all_data:
@@ -446,15 +352,20 @@ class MGNREGADataService:
             return False
         
         districts = District.objects.filter(state=state)
+        
+        if skip_existing:
+            districts = districts.annotate(
+                data_count=Count('mgnregadata')
+            ).filter(data_count=0)
+            logger.info(f"Processing {districts.count()} districts without data")
+        
         synced_count = 0
         
         for district in districts:
-            # Filter records for this district
             district_records = [
                 r for r in all_data['records']
                 if r.get('district_code') == district.district_code or
-                   r.get('dist_code') == district.district_code or
-                   r.get('district_name', '').lower() == district.name.lower()
+                   (r.get('district_name', '').lower().strip() == district.name.lower().strip())
             ]
             
             if district_records:
