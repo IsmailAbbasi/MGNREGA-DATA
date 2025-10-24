@@ -145,19 +145,15 @@
 </div>
 
 <script>
-// Reset all buttons on page load (fixes back button issue)
-window.addEventListener('pageshow', function(event) {
-    // Reset all buttons when page is shown (including back button navigation)
-    resetAllButtons();
-});
+// Global navigation flag - reset on EVERY page load
+let isNavigating = false;
 
-// Also reset on DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function() {
-    resetAllButtons();
-});
-
+// CRITICAL: Reset everything when page loads
 function resetAllButtons() {
-    // Reset all view buttons
+    // Reset navigation flag
+    isNavigating = false;
+    
+    // Reset all buttons
     document.querySelectorAll('.view-btn, .popular-btn').forEach(btn => {
         btn.disabled = false;
         btn.style.opacity = '1';
@@ -176,13 +172,28 @@ function resetAllButtons() {
     });
 }
 
-// Navigate to district with loading animation
-let isNavigating = false;
+// Reset when page FIRST loads
+document.addEventListener('DOMContentLoaded', function() {
+    resetAllButtons();
+});
 
+// CRITICAL: Reset when coming BACK to page (back button)
+window.addEventListener('pageshow', function(event) {
+    resetAllButtons();
+});
+
+// Also reset on visibility change (tab switching)
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        resetAllButtons();
+    }
+});
+
+// Navigate to district with loading animation
 function navigateToDistrict(button, url) {
     // Prevent double-click
     if (isNavigating) {
-        return;
+        return false;
     }
     isNavigating = true;
     
@@ -204,10 +215,10 @@ function navigateToDistrict(button, url) {
     button.style.opacity = '0.7';
     button.style.cursor = 'not-allowed';
     
-    // Navigate after brief delay (for visual feedback)
-    setTimeout(() => {
-        window.location.href = url;
-    }, 300);
+    // Navigate immediately (removed delay)
+    window.location.href = url;
+    
+    return false;
 }
 
 // Search functionality with debouncing
