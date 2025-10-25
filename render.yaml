@@ -10,7 +10,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.10.12
       - key: DATABASE_URL
-        sync: false  # Add manually in Render dashboard
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG

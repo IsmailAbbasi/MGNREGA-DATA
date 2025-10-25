@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def district_list(request):
     """Display all districts with data availability indicator"""
-    # Get all districts with data count
+    # Get all districts with data count - NO LIMIT
     districts = District.objects.annotate(
         data_count=Count('mgnregadata')
     ).order_by('state', 'name')
@@ -18,10 +18,13 @@ def district_list(request):
     districts_with_data_count = districts_with_data.count()
     total_districts = districts.count()
     
+    # Log for debugging
+    logger.info(f"Total districts: {total_districts}, With data: {districts_with_data_count}")
+    
     # Get popular districts (only those with data)
     popular_names = ['Bengaluru', 'Lucknow', 'Pune', 'Jaipur', 'Ahmadabad', 
                      'Nagpur', 'Patna', 'Bhopal', 'Indore', 'Kanpur']
-    popular_districts = districts_with_data.filter(name__in=popular_names)
+    popular_districts = districts_with_data.filter(name__in=popular_names)[:10]
     
     context = {
         'districts': districts,
@@ -32,42 +35,49 @@ def district_list(request):
     
     return render(request, 'districts/district_list.html', context)
 
+
 def district_detail(request, district_id):
     """Display MGNREGA performance data for a specific district"""
     district = get_object_or_404(District, id=district_id)
     
-    # Get data from database
+    # Get data from database ONLY (no API call on page load)
     mgnrega_data = MGNREGAData.objects.filter(district=district).order_by('-year', '-month')
     
-    # Try to refresh from API in background (non-blocking)
-    data_source = 'Database (cached)'
-    try:
-        api_data = MGNREGADataService.fetch_district_data(district.district_code)
-        if api_data and api_data.get('source') == 'api':
-            data_source = 'Live from Government API'
-            # Re-query after potential API sync
-            mgnrega_data = MGNREGAData.objects.filter(district=district).order_by('-year', '-month')
-    except Exception as e:
-        logger.warning(f"API refresh failed for {district.name}: {e}")
+    data_source = 'Database (Supabase)'
     
     # Prepare context
     if mgnrega_data.exists():
         latest = mgnrega_data.first()
         
         # Calculate aggregates safely
-        total_expenditure = sum(float(d.total_expenditure or 0) for d in mgnrega_data)
-        total_workers = sum(int(d.total_workers or 0) for d in mgnrega_data)
-        total_work_days = sum(float(d.total_work_days or 0) for d in mgnrega_data)
+        total_expenditure = sum(
+            float(d.total_expenditure or 0) for d in mgnrega_data
+        )
         
-        # Calculate average employment rate from non-zero values
-        rates = [float(d.employment_rate or 0) for d in mgnrega_data if (d.employment_rate or 0) > 0]
-        avg_employment_rate = sum(rates) / len(rates) if rates else 0
+        total_workers = sum(
+            int(d.total_workers or 0) for d in mgnrega_data
+        )
         
-        # Check if latest data has ANY meaningful values
+        total_work_days = sum(
+            float(d.total_work_days or 0) for d in mgnrega_data
+        )
+        
+        # Calculate average employment rate
+        employment_rates = [
+            float(d.employment_rate or 0) 
+            for d in mgnrega_data 
+            if d.employment_rate is not None
+        ]
+        avg_employment_rate = (
+            sum(employment_rates) / len(employment_rates) 
+            if employment_rates else 0
+        )
+        
+        # Check if data is meaningful (not all zeros)
         has_meaningful_data = (
-            (latest.total_workers or 0) > 0 or 
-            float(latest.total_expenditure or 0) > 0 or 
-            float(latest.total_work_days or 0) > 0 or
+            (latest.total_workers or 0) > 0 or
+            (latest.total_expenditure or 0) > 0 or
+            (latest.total_work_days or 0) > 0 or
             (latest.total_job_cards_issued or 0) > 0 or
             (latest.works_completed or 0) > 0
         )
@@ -94,7 +104,7 @@ def district_detail(request, district_id):
             'avg_employment_rate': 0,
             'total_workers': 0,
             'total_work_days': 0,
-            'data_source': 'No data available',
+            'data_source': 'No Data',
             'has_meaningful_data': False,
             'data_records_count': 0,
         }
