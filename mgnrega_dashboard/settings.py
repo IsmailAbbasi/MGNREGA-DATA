@@ -12,12 +12,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'  # Default True for local dev
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '.onrender.com',  # Allow all Render subdomains
+    '.onrender.com',
     '*.onrender.com',
 ]
 
@@ -38,7 +38,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Must be after SecurityMiddleware
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -69,16 +69,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'mgnrega_dashboard.wsgi.application'
 
 # Database
-# Use PostgreSQL on Render, SQLite locally
-if os.environ.get('DATABASE_URL'):
+# Use PostgreSQL on Render/Supabase, SQLite locally
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Parse database URL
     DATABASES = {
         'default': dj_database_url.config(
-            default=os.environ.get('DATABASE_URL'),
+            default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
         )
     }
+    
+    # Force SSL for PostgreSQL (required by Render & Supabase)
+    DATABASES['default']['OPTIONS'] = {
+        'sslmode': 'require',
+    }
 else:
+    # Local SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -86,7 +95,7 @@ else:
         }
     }
 
-# Cache configuration - Use database cache for simplicity
+# Cache configuration
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
